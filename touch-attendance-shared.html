@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>出退勤タッチパネル</title>
+<style>
+:root{
+  --accent:#6c63ff;--accent2:#48cae4;
+  --bg:#0d0d1a;--surface:#16162a;--surface2:#1e1e36;
+  --border:rgba(255,255,255,0.07);--text:#eeeeff;--muted:#666688;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Segoe UI',-apple-system,sans-serif;overscroll-behavior:none;}
+.screen{display:none;flex-direction:column;height:100vh;overflow:hidden;}
+.screen.active{display:flex;}
+
+/* SETUP */
+.setup-body{flex:1;overflow-y:auto;padding:20px 16px 40px;}
+.setup-card{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:20px;margin-bottom:14px;}
+.setup-card h3{font-size:.95rem;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+.step-badge{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:800;flex-shrink:0;}
+.setup-desc{font-size:.8rem;color:var(--muted);line-height:1.8;margin-bottom:12px;}
+.setup-desc b{color:var(--text);}
+.setup-desc code{background:var(--surface2);padding:1px 6px;border-radius:5px;font-size:.78rem;color:var(--accent2);}
+.warn-box{background:rgba(255,185,50,.08);border:1px solid rgba(255,185,50,.3);border-radius:12px;padding:12px 14px;font-size:.78rem;color:#ffb932;line-height:1.7;margin-bottom:12px;}
+.url-input{width:100%;padding:12px 13px;border-radius:11px;border:2px solid var(--border);background:var(--surface2);color:var(--text);font-size:.82rem;outline:none;margin-bottom:10px;word-break:break-all;}
+.url-input:focus{border-color:var(--accent);}
+.url-input::placeholder{color:var(--muted);}
+.btn{padding:12px 18px;border:none;border-radius:11px;font-size:.85rem;font-weight:700;cursor:pointer;transition:all .15s;}
+.btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;}
+.btn-ghost{background:var(--surface2);color:var(--text);border:1.5px solid var(--border);}
+.btn-danger{background:rgba(255,80,80,.12);color:#ff6b6b;border:1.5px solid rgba(255,80,80,.25);}
+.btn-sm{padding:8px 13px;font-size:.78rem;}
+.alert{padding:10px 13px;border-radius:10px;font-size:.8rem;margin-top:8px;line-height:1.6;}
+.alert-ok {background:rgba(80,220,120,.1);border:1px solid rgba(80,220,120,.3);color:#50dc78;}
+.alert-err{background:rgba(255,80,80,.1);border:1px solid rgba(255,80,80,.3);color:#ff6b6b;}
+.alert-info{background:rgba(108,99,255,.1);border:1px solid rgba(108,99,255,.3);color:#a09fff;}
+
+/* HEADER */
+.hdr{display:flex;align-items:center;justify-content:space-between;padding:13px 18px 9px;background:linear-gradient(180deg,rgba(108,99,255,.14) 0%,transparent 100%);border-bottom:1px solid var(--border);flex-shrink:0;}
+.hdr-title{font-size:1rem;font-weight:700;}
+.hdr-right{display:flex;align-items:center;gap:8px;}
+.hdr-time{font-size:.75rem;color:var(--muted);text-align:right;line-height:1.5;}
+.sync-btn{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:7px;padding:4px 8px;font-size:.7rem;cursor:pointer;white-space:nowrap;}
+.sync-btn.ok{color:#50dc78;border-color:rgba(80,220,120,.4);}
+.sync-btn.err{color:#ff6b6b;border-color:rgba(255,80,80,.4);}
+
+/* GRID */
+.emp-scroll{flex:1;overflow-y:auto;padding:12px;}
+.legend{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;}
+.legend-item{display:flex;align-items:center;gap:4px;font-size:.68rem;color:var(--muted);}
+.legend-dot{width:7px;height:7px;border-radius:50%;}
+.emp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(142px,1fr));gap:10px;}
+.emp-tile{background:var(--surface);border:1.5px solid var(--border);border-radius:18px;padding:16px 10px 12px;text-align:center;cursor:pointer;transition:transform .1s;user-select:none;position:relative;}
+.emp-tile:active{transform:scale(.93);}
+.emp-tile.s-in  {border-color:rgba(80,220,120,.45);background:rgba(80,220,120,.06);}
+.emp-tile.s-trip{border-color:rgba(255,185,50,.45);background:rgba(255,185,50,.06);}
+.status-dot{position:absolute;top:10px;right:10px;width:8px;height:8px;border-radius:50%;background:var(--muted);}
+.s-in   .status-dot{background:#50dc78;box-shadow:0 0 5px #50dc78;}
+.s-trip .status-dot{background:#ffb932;box-shadow:0 0 5px #ffb932;}
+.av{width:58px;height:58px;border-radius:50%;margin:0 auto 9px;display:flex;align-items:center;justify-content:center;font-size:1.4rem;font-weight:800;color:#fff;position:relative;}
+.av-ring{position:absolute;inset:-3px;border-radius:50%;border:2px solid transparent;}
+.s-in   .av-ring{border-color:#50dc78;}
+.s-trip .av-ring{border-color:#ffb932;}
+.emp-name{font-size:.83rem;font-weight:700;margin-bottom:2px;}
+.emp-dept{font-size:.67rem;color:var(--muted);}
+.emp-state{font-size:.65rem;margin-top:5px;font-weight:600;color:var(--muted);}
+.s-in   .emp-state{color:#50dc78;}
+.s-trip .emp-state{color:#ffb932;}
+
+/* BOTTOM NAV */
+.bnav{display:flex;border-top:1px solid var(--border);background:var(--surface);flex-shrink:0;}
+.bnav button{flex:1;padding:10px 6px;border:none;background:transparent;color:var(--muted);font-size:.67rem;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;}
+.bnav button.active{color:var(--accent);}
+.bnav button .ico{font-size:1.15rem;}
+
+/* TYPE SHEET */
+#type-overlay{position:fixed;inset:0;z-index:90;display:none;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.55);backdrop-filter:blur(5px);}
+#type-overlay.show{display:flex;}
+.type-sheet{background:var(--surface);border-radius:26px 26px 0 0;padding:16px 16px 34px;width:100%;max-width:480px;animation:slideUp .2s ease;}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.sheet-handle{width:38px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 14px;}
+.sheet-emp{display:flex;align-items:center;gap:11px;margin-bottom:14px;padding-bottom:13px;border-bottom:1px solid var(--border);}
+.sheet-av{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.1rem;font-weight:800;color:#fff;flex-shrink:0;}
+.sheet-name{font-size:.92rem;font-weight:700;}
+.sheet-dept{font-size:.72rem;color:var(--muted);margin-top:2px;}
+.sheet-label{font-size:.68rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:9px;}
+.type-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;}
+.type-btn{padding:14px 8px;border:1.5px solid var(--border);border-radius:14px;background:var(--surface2);color:var(--text);cursor:pointer;font-size:.85rem;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:5px;transition:all .12s;}
+.type-btn:active{transform:scale(.95);}
+.type-btn .tb-ico{font-size:1.6rem;}
+.type-btn .tb-sub{font-size:.64rem;color:var(--muted);font-weight:500;}
+.type-btn.tb-in      {border-color:rgba(80,220,120,.4);background:rgba(80,220,120,.08);}
+.type-btn.tb-out     {border-color:rgba(255,140,80,.4);background:rgba(255,140,80,.08);}
+.type-btn.tb-trip-in {border-color:rgba(255,185,50,.4);background:rgba(255,185,50,.08);}
+.type-btn.tb-trip-out{border-color:rgba(130,100,255,.4);background:rgba(130,100,255,.08);}
+.btn-cancel{width:100%;padding:12px;border:1.5px solid var(--border);border-radius:12px;background:transparent;color:var(--muted);font-size:.85rem;font-weight:600;cursor:pointer;}
+
+/* CONFIRM */
+#stamp-overlay{position:fixed;inset:0;z-index:100;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.6);backdrop-filter:blur(6px);}
+#stamp-overlay.show{display:flex;}
+.stamp-card{background:var(--surface);border-radius:26px;padding:28px 30px;text-align:center;max-width:280px;width:90%;border:1px solid var(--border);animation:pop .22s cubic-bezier(.34,1.56,.64,1);}
+@keyframes pop{from{transform:scale(.7);opacity:0}to{transform:scale(1);opacity:1}}
+.stamp-av{width:70px;height:70px;border-radius:50%;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;font-size:1.6rem;font-weight:800;color:#fff;}
+.stamp-name{font-size:1.1rem;font-weight:800;margin-bottom:2px;}
+.stamp-dept{font-size:.75rem;color:var(--muted);margin-bottom:15px;}
+.stamp-type{font-size:1.5rem;font-weight:900;margin-bottom:5px;}
+.stamp-type.t-in      {color:#50dc78;}
+.stamp-type.t-out     {color:#ff8c50;}
+.stamp-type.t-trip-in {color:#ffb932;}
+.stamp-type.t-trip-out{color:#a78bfa;}
+.stamp-time{font-size:.82rem;color:var(--muted);margin-bottom:18px;}
+.stamp-confirm-btn{width:100%;padding:12px;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;border-radius:12px;color:white;font-size:.88rem;font-weight:700;cursor:pointer;}
+.offline-tag{font-size:.67rem;color:#ffb932;margin-top:5px;}
+
+/* RECORDS / ADMIN */
+.admin-body{flex:1;overflow-y:auto;padding:12px;}
+.section-label{font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:12px 0 6px;}
+.input-row{display:flex;gap:7px;margin-bottom:10px;flex-wrap:wrap;}
+.input-row input{flex:1;min-width:90px;padding:10px 12px;border-radius:11px;border:1.5px solid var(--border);background:var(--surface2);color:var(--text);font-size:.83rem;outline:none;}
+.input-row input:focus{border-color:var(--accent);}
+.input-row input::placeholder{color:var(--muted);}
+.emp-row{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface);border-radius:12px;margin-bottom:6px;border:1px solid var(--border);}
+.emp-row .av-sm{width:35px;height:35px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.83rem;color:#fff;}
+.emp-row .info{flex:1;}
+.emp-row .info .n{font-size:.83rem;font-weight:700;}
+.emp-row .info .d{font-size:.68rem;color:var(--muted);}
+.emp-row .del{background:rgba(255,80,80,.1);border:none;color:#ff6b6b;border-radius:7px;padding:5px 9px;cursor:pointer;font-size:.73rem;}
+.stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:11px;text-align:center;}
+.stat .v{font-size:1.5rem;font-weight:800;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.stat .l{font-size:.65rem;color:var(--muted);margin-top:2px;}
+.rec-item{display:flex;align-items:center;gap:9px;padding:9px 11px;background:var(--surface);border-radius:11px;margin-bottom:6px;}
+.rec-item .av-sm{width:33px;height:33px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;font-size:.8rem;}
+.rec-info{flex:1;}
+.rec-info .rn{font-size:.8rem;font-weight:700;}
+.rec-info .rt{font-size:.68rem;color:var(--muted);margin-top:1px;}
+.badge{padding:2px 8px;border-radius:20px;font-size:.65rem;font-weight:700;white-space:nowrap;}
+.badge-in      {background:rgba(80,220,120,.15);color:#50dc78;border:1px solid rgba(80,220,120,.3);}
+.badge-out     {background:rgba(255,140,80,.15);color:#ff8c50;border:1px solid rgba(255,140,80,.3);}
+.badge-trip-in {background:rgba(255,185,50,.15);color:#ffb932;border:1px solid rgba(255,185,50,.3);}
+.badge-trip-out{background:rgba(167,139,250,.15);color:#a78bfa;border:1px solid rgba(167,139,250,.3);}
+.loading{text-align:center;padding:36px 20px;color:var(--muted);font-size:.82rem;}
+.spinner{display:inline-block;width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.c0{background:linear-gradient(135deg,#6c63ff,#48cae4)}
+.c1{background:linear-gradient(135deg,#f72585,#b5179e)}
+.c2{background:linear-gradient(135deg,#fb8500,#ffb703)}
+.c3{background:linear-gradient(135deg,#06d6a0,#118ab2)}
+.c4{background:linear-gradient(135deg,#ef476f,#ffd166)}
+.c5{background:linear-gradient(135deg,#8338ec,#3a86ff)}
+</style>
+</head>
+<body>
+
+<!-- ===== SETUP ===== -->
+<div id="screen-setup" class="screen active">
+  <div class="hdr"><div class="hdr-title">⚙️ 初期設定</div></div>
+  <div class="setup-body">
+
+    <div class="warn-box">
+      ⚠️ <b>以前のエラーについて</b><br>
+      Google Apps Script のPOST通信はCORSエラーが発生しやすいため、<br>
+      このバージョンは<b>すべてGET通信</b>に変更しました。<br>
+      下記の手順でもう一度セットアップしてください。
+    </div>
+
+    <div class="setup-card">
+      <h3><span class="step-badge">1</span> スプレッドシートを作成</h3>
+      <div class="setup-desc">
+        <a href="https://drive.google.com" target="_blank" style="color:var(--accent2)">drive.google.com</a> を開き、
+        「<b>新規</b>」→「<b>Googleスプレッドシート</b>」を作成します。
+      </div>
+    </div>
+
+    <div class="setup-card">
+      <h3><span class="step-badge">2</span> Apps Script を設置</h3>
+      <div class="setup-desc">
+        スプレッドシートのメニュー「<b>拡張機能</b>」→「<b>Apps Script</b>」を開きます。<br>
+        既存のコードを<b>全て削除</b>して、ダウンロードした <code>gas-server.gs</code> の内容を貼り付けて保存してください（Ctrl+S）。
+      </div>
+    </div>
+
+    <div class="setup-card">
+      <h3><span class="step-badge">3</span> シートを初期化</h3>
+      <div class="setup-desc">
+        上部の関数名のプルダウンで <code>initSheets</code> を選択して、<b>▶実行</b> ボタンを押します。<br>
+        「承認が必要です」と出たら「<b>権限を確認</b>」→ Googleアカウントを選択 → 「<b>許可</b>」をクリックしてください。<br>
+        スプレッドシートに「打刻記録」「社員マスタ」シートが作成されます。
+      </div>
+    </div>
+
+    <div class="setup-card">
+      <h3><span class="step-badge">4</span> ウェブアプリとして公開</h3>
+      <div class="setup-desc">
+        Apps Script 右上の「<b>デプロイ</b>」→「<b>新しいデプロイ</b>」をクリック。<br>
+        ⚙️アイコン →「<b>ウェブアプリ</b>」を選択し、以下の通り設定してください：<br><br>
+        ・次のユーザーとして実行：<b>自分</b><br>
+        ・アクセスできるユーザー：<b>全員</b><br><br>
+        「<b>デプロイ</b>」を押すと、<b>ウェブアプリのURL</b> が表示されます。
+      </div>
+      <div class="warn-box" style="margin-bottom:0">
+        ⚠️ URLをコピーする前に、一度そのURLをブラウザで直接開いてください。<br>
+        「このアプリはGoogleによって確認されていません」と表示されたら「<b>詳細</b>」→「<b>（アプリ名）に移動</b>」をクリックして許可します。<br>
+        これをしないとアクセスエラーになります。
+      </div>
+    </div>
+
+    <div class="setup-card">
+      <h3><span class="step-badge">5</span> URLを貼り付けて接続</h3>
+      <div class="setup-desc">コピーしたURLを以下に貼り付け、「接続テスト」を押してください。</div>
+      <input class="url-input" id="gas-url-input" type="url"
+        placeholder="https://script.google.com/macros/s/AKf..." />
+      <button class="btn btn-primary" style="width:100%" onclick="testAndSave()">🔗 接続テストして保存</button>
+      <div id="test-result"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ===== MAIN ===== -->
+<div id="screen-main" class="screen">
+  <div class="hdr">
+    <div class="hdr-title">👆 出退勤タッチ</div>
+    <div class="hdr-right">
+      <button class="sync-btn" id="sync-btn" onclick="syncAll()">🔄 同期</button>
+      <div class="hdr-time" id="hdr-time"></div>
+    </div>
+  </div>
+  <div class="emp-scroll">
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#50dc78"></div>出勤中</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#ffb932"></div>出張中</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--muted)"></div>未打刻/退勤済</div>
+    </div>
+    <div class="emp-grid" id="emp-grid"></div>
+  </div>
+  <div class="bnav">
+    <button class="active" onclick="goScreen('main')"><span class="ico">🏠</span>タッチ打刻</button>
+    <button onclick="goScreen('records')"><span class="ico">📋</span>記録一覧</button>
+    <button onclick="goScreen('admin')"><span class="ico">⚙️</span>管理</button>
+  </div>
+</div>
+
+<!-- ===== RECORDS ===== -->
+<div id="screen-records" class="screen">
+  <div class="hdr">
+    <div class="hdr-title">📋 記録一覧</div>
+    <div class="hdr-time" id="hdr-time2"></div>
+  </div>
+  <div class="admin-body">
+    <div class="stats-row">
+      <div class="stat"><div class="v" id="s-today">0</div><div class="l">本日の記録</div></div>
+      <div class="stat"><div class="v" id="s-in">0</div><div class="l">出勤中</div></div>
+      <div class="stat"><div class="v" id="s-total">0</div><div class="l">累計</div></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div class="section-label" style="margin:0">打刻履歴（直近7日）</div>
+      <button class="btn btn-ghost btn-sm" onclick="loadRecords()">🔄 更新</button>
+    </div>
+    <div id="rec-list" style="margin-top:10px"><div class="loading"><span class="spinner"></span>読み込み中...</div></div>
+  </div>
+  <div class="bnav">
+    <button onclick="goScreen('main')"><span class="ico">🏠</span>タッチ打刻</button>
+    <button class="active" onclick="goScreen('records')"><span class="ico">📋</span>記録一覧</button>
+    <button onclick="goScreen('admin')"><span class="ico">⚙️</span>管理</button>
+  </div>
+</div>
+
+<!-- ===== ADMIN ===== -->
+<div id="screen-admin" class="screen">
+  <div class="hdr">
+    <div class="hdr-title">⚙️ 管理</div>
+    <div class="hdr-time" id="hdr-time3"></div>
+  </div>
+  <div class="admin-body">
+    <div class="section-label">社員を追加</div>
+    <div class="input-row">
+      <input type="text" id="inp-name" placeholder="氏名">
+      <input type="text" id="inp-dept" placeholder="部署" style="max-width:110px">
+    </div>
+    <button class="btn btn-primary" style="width:100%;margin-bottom:16px" onclick="addEmp()">＋ 社員を追加</button>
+    <div class="section-label">社員一覧</div>
+    <div id="emp-mgmt-list"><div class="loading">読み込み中...</div></div>
+    <div class="section-label" style="margin-top:16px">その他</div>
+    <div style="display:flex;gap:9px;flex-wrap:wrap;">
+      <button class="btn btn-ghost btn-sm" onclick="exportCSV()">📥 CSV出力</button>
+      <button class="btn btn-ghost btn-sm" onclick="goScreen('setup')">🔧 URL再設定</button>
+    </div>
+  </div>
+  <div class="bnav">
+    <button onclick="goScreen('main')"><span class="ico">🏠</span>タッチ打刻</button>
+    <button onclick="goScreen('records')"><span class="ico">📋</span>記録一覧</button>
+    <button class="active" onclick="goScreen('admin')"><span class="ico">⚙️</span>管理</button>
+  </div>
+</div>
+
+<!-- TYPE SHEET -->
+<div id="type-overlay" onclick="closeTypeSheet(event)">
+  <div class="type-sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-emp">
+      <div class="sheet-av" id="sh-av"></div>
+      <div><div class="sheet-name" id="sh-name"></div><div class="sheet-dept" id="sh-dept"></div></div>
+    </div>
+    <div class="sheet-label">打刻の種類を選択</div>
+    <div class="type-btns">
+      <button class="type-btn tb-in"       onclick="doStamp('in')">      <span class="tb-ico">🏢</span>出勤<span class="tb-sub">通常出勤</span></button>
+      <button class="type-btn tb-out"      onclick="doStamp('out')">     <span class="tb-ico">🏠</span>退勤<span class="tb-sub">通常退勤</span></button>
+      <button class="type-btn tb-trip-in"  onclick="doStamp('trip-in')"> <span class="tb-ico">🚆</span>直行<span class="tb-sub">出張・直行</span></button>
+      <button class="type-btn tb-trip-out" onclick="doStamp('trip-out')"><span class="tb-ico">🏨</span>直帰<span class="tb-sub">出張・直帰</span></button>
+    </div>
+    <button class="btn-cancel" onclick="closeTypeSheet()">キャンセル</button>
+  </div>
+</div>
+
+<!-- CONFIRM -->
+<div id="stamp-overlay">
+  <div class="stamp-card">
+    <div class="stamp-av" id="ov-av"></div>
+    <div class="stamp-name" id="ov-name"></div>
+    <div class="stamp-dept" id="ov-dept"></div>
+    <div class="stamp-type" id="ov-type"></div>
+    <div class="stamp-time" id="ov-time"></div>
+    <div class="offline-tag" id="ov-offline" style="display:none">📵 オフライン記録（次回同期時に送信）</div>
+    <button class="stamp-confirm-btn" onclick="closeConfirm()">確認</button>
+  </div>
+</div>
+
+<script>
+const GAS_URL_KEY = 'gasUrl_v2';
+const EMP_KEY     = 'ta_emp_v4';
+const REC_KEY     = 'ta_rec_v4';
+const QUEUE_KEY   = 'ta_queue_v4';
+
+const TYPE_INFO = {
+  'in':       {label:'🏢 出勤', cls:'t-in',       badge:'badge-in',       beep:880},
+  'out':      {label:'🏠 退勤', cls:'t-out',      badge:'badge-out',      beep:440},
+  'trip-in':  {label:'🚆 直行', cls:'t-trip-in',  badge:'badge-trip-in',  beep:660},
+  'trip-out': {label:'🏨 直帰', cls:'t-trip-out', badge:'badge-trip-out', beep:550},
+};
+const BADGE_LABELS = {in:'出勤',out:'退勤','trip-in':'直行','trip-out':'直帰'};
+
+let GAS_URL   = localStorage.getItem(GAS_URL_KEY) || '';
+let employees = JSON.parse(localStorage.getItem(EMP_KEY)  || '[]');
+let records   = JSON.parse(localStorage.getItem(REC_KEY)  || '[]');
+let offQueue  = JSON.parse(localStorage.getItem(QUEUE_KEY)|| '[]');
+let pendingEmpId = null;
+
+function saveEmp()  { localStorage.setItem(EMP_KEY,   JSON.stringify(employees)); }
+function saveRec()  { localStorage.setItem(REC_KEY,   JSON.stringify(records));   }
+function saveQueue(){ localStorage.setItem(QUEUE_KEY, JSON.stringify(offQueue));  }
+function cc(i){ return 'c'+(i%6); }
+function ini(n){ return n.trim().charAt(0); }
+
+// --- すべてGETで通信 ---
+async function apiGet(params){
+  const url = GAS_URL + '?' + new URLSearchParams(params).toString();
+  const res = await fetch(url);
+  return res.json();
+}
+
+// ===== CLOCK =====
+function tick(){
+  const d = new Date();
+  const t  = d.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+  const dt = d.toLocaleDateString('ja-JP',{month:'numeric',day:'numeric',weekday:'short'});
+  ['hdr-time','hdr-time2','hdr-time3'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.innerHTML=`<b style="font-size:.88rem">${t}</b><br>${dt}`;
+  });
+}
+setInterval(tick,1000); tick();
+
+// ===== SETUP =====
+async function testAndSave(){
+  const url = document.getElementById('gas-url-input').value.trim();
+  const el  = document.getElementById('test-result');
+  if(!url){ el.innerHTML='<div class="alert alert-err">URLを入力してください</div>'; return; }
+  el.innerHTML='<div class="alert alert-info"><span class="spinner"></span>接続確認中...</div>';
+  try{
+    const res = await fetch(url + '?action=getEmployees');
+    const data = await res.json();
+    if(data.ok){
+      GAS_URL = url;
+      localStorage.setItem(GAS_URL_KEY, url);
+      employees = data.employees || [];
+      saveEmp();
+      el.innerHTML=`<div class="alert alert-ok">✅ 接続成功！社員 ${employees.length}名 を取得しました</div>`;
+      setTimeout(()=>{ goScreen('main'); syncAll(); }, 1200);
+    } else {
+      el.innerHTML=`<div class="alert alert-err">❌ エラー: ${data.error}<br><small>手順4の「URLを直接ブラウザで開く」を試してください</small></div>`;
+    }
+  }catch(e){
+    el.innerHTML=`<div class="alert alert-err">❌ 接続できませんでした<br><small>URLを確認するか、手順4をもう一度行ってください<br>${e.message}</small></div>`;
+  }
+}
+
+// ===== SYNC =====
+async function syncAll(){
+  if(!GAS_URL) return;
+  const btn = document.getElementById('sync-btn');
+  if(btn){ btn.textContent='⏳'; btn.className='sync-btn'; }
+
+  // オフラインキューを送信
+  for(const item of [...offQueue]){
+    try{
+      const res = await apiGet(item);
+      if(res.ok){ offQueue=offQueue.filter(q=>q.id!==item.id); saveQueue(); }
+    }catch(e){ break; }
+  }
+
+  try{
+    const [empRes, recRes] = await Promise.all([
+      apiGet({action:'getEmployees'}),
+      apiGet({action:'getRecords', days:7})
+    ]);
+    if(empRes.ok){ employees=empRes.employees; saveEmp(); }
+    if(recRes.ok){ records=recRes.records; saveRec(); }
+    renderGrid();
+    if(btn){ btn.textContent='✅ 同期済'; btn.className='sync-btn ok'; setTimeout(()=>{ btn.textContent='🔄 同期'; btn.className='sync-btn'; },2000); }
+  }catch(e){
+    if(btn){ btn.textContent='❌ オフライン'; btn.className='sync-btn err'; setTimeout(()=>{ btn.textContent='🔄 同期'; btn.className='sync-btn'; },3000); }
+  }
+}
+
+// ===== SCREENS =====
+function goScreen(name){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById('screen-'+name).classList.add('active');
+  document.querySelectorAll('.bnav').forEach(nav=>{
+    nav.querySelectorAll('button').forEach((b,i)=>{
+      b.classList.toggle('active',['main','records','admin'][i]===name);
+    });
+  });
+  if(name==='main')    renderGrid();
+  if(name==='records'){ renderRecords(); loadRecords(); }
+  if(name==='admin')   renderAdmin();
+}
+
+// ===== STATUS =====
+function todayRecs(empId){
+  const today=new Date().toDateString();
+  return records.filter(r=>new Date(r.ts).toDateString()===today && r.empId===empId);
+}
+function lastType(empId){ const tr=todayRecs(empId); return tr.length?tr[tr.length-1].type:null; }
+function lastTimeStr(empId){
+  const tr=todayRecs(empId); if(!tr.length) return '';
+  return new Date(tr[tr.length-1].ts).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+}
+function getTileClass(empId){
+  const lt=lastType(empId);
+  if(lt==='in') return 's-in';
+  if(lt==='trip-in') return 's-trip';
+  return 's-out';
+}
+function getStateLabel(empId){
+  const lt=lastType(empId); const tm=lastTimeStr(empId);
+  if(!lt) return '未打刻';
+  if(lt==='in')       return `✅ 出勤中 ${tm}`;
+  if(lt==='out')      return `退勤済 ${tm}`;
+  if(lt==='trip-in')  return `🚆 出張中 ${tm}`;
+  if(lt==='trip-out') return `直帰済 ${tm}`;
+  return '';
+}
+
+// ===== GRID =====
+function renderGrid(){
+  const grid=document.getElementById('emp-grid');
+  if(!employees.length){
+    grid.innerHTML='<div class="loading">社員が登録されていません</div>'; return;
+  }
+  grid.innerHTML=employees.map((e,i)=>`
+    <div class="emp-tile ${getTileClass(e.id)}" onclick="openTypeSheet('${e.id}')">
+      <div class="status-dot"></div>
+      <div class="av ${cc(i)}"><div class="av-ring"></div>${ini(e.name)}</div>
+      <div class="emp-name">${e.name}</div>
+      <div class="emp-dept">${e.dept}</div>
+      <div class="emp-state">${getStateLabel(e.id)}</div>
+    </div>`).join('');
+}
+
+// ===== TYPE SHEET =====
+function openTypeSheet(empId){
+  pendingEmpId=empId;
+  const emp=employees.find(e=>e.id===empId);
+  const idx=employees.indexOf(emp);
+  const sh=document.getElementById('sh-av');
+  sh.className=`sheet-av ${cc(idx)}`; sh.textContent=ini(emp.name);
+  document.getElementById('sh-name').textContent=emp.name;
+  document.getElementById('sh-dept').textContent=emp.dept;
+  document.getElementById('type-overlay').classList.add('show');
+}
+function closeTypeSheet(e){
+  if(e && e.target!==document.getElementById('type-overlay')) return;
+  document.getElementById('type-overlay').classList.remove('show');
+  pendingEmpId=null;
+}
+
+// ===== STAMP =====
+async function doStamp(type){
+  document.getElementById('type-overlay').classList.remove('show');
+  if(!pendingEmpId) return;
+  const emp=employees.find(e=>e.id===pendingEmpId);
+  const idx=employees.indexOf(emp);
+  const now=new Date();
+  const record={id:String(Date.now()), empId:emp.id, name:emp.name, dept:emp.dept, type, ts:now.toISOString()};
+
+  // ローカルに即時保存
+  records.unshift(record); saveRec();
+  playBeep(TYPE_INFO[type].beep);
+  let offline=false;
+
+  if(GAS_URL){
+    try{
+      await apiGet({action:'stamp', ...record});
+    }catch(e){
+      offQueue.push({action:'stamp', ...record}); saveQueue(); offline=true;
+    }
+  } else { offline=true; }
+
+  showConfirm(emp, idx, type, now, offline);
+  pendingEmpId=null;
+}
+
+function showConfirm(emp,idx,type,date,offline){
+  const av=document.getElementById('ov-av');
+  av.className=`stamp-av ${cc(idx)}`; av.textContent=ini(emp.name);
+  document.getElementById('ov-name').textContent=emp.name;
+  document.getElementById('ov-dept').textContent=emp.dept;
+  const te=document.getElementById('ov-type');
+  te.textContent=TYPE_INFO[type].label; te.className='stamp-type '+TYPE_INFO[type].cls;
+  document.getElementById('ov-time').textContent=
+    date.toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  document.getElementById('ov-offline').style.display=offline?'block':'none';
+  document.getElementById('stamp-overlay').classList.add('show');
+  setTimeout(closeConfirm, 3000);
+}
+function closeConfirm(){
+  document.getElementById('stamp-overlay').classList.remove('show');
+  renderGrid();
+}
+function playBeep(freq){
+  try{
+    const ac=new(window.AudioContext||window.webkitAudioContext)();
+    const o=ac.createOscillator(); const g=ac.createGain();
+    o.connect(g); g.connect(ac.destination);
+    o.frequency.value=freq;
+    g.gain.setValueAtTime(.3,ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.35);
+    o.start(); o.stop(ac.currentTime+.35);
+  }catch(e){}
+}
+
+// ===== RECORDS =====
+async function loadRecords(){
+  if(!GAS_URL) return;
+  try{
+    const data=await apiGet({action:'getRecords',days:7});
+    if(data.ok){ records=data.records; saveRec(); renderRecords(); }
+  }catch(e){}
+}
+function renderRecords(){
+  const today=new Date().toDateString();
+  const todayAll=records.filter(r=>new Date(r.ts).toDateString()===today);
+  const empSt={};
+  todayAll.forEach(r=>{empSt[r.empId]=r.type;});
+  document.getElementById('s-today').textContent=todayAll.length;
+  document.getElementById('s-in').textContent=Object.values(empSt).filter(t=>t==='in'||t==='trip-in').length;
+  document.getElementById('s-total').textContent=records.length;
+  const list=document.getElementById('rec-list');
+  if(!records.length){ list.innerHTML='<div class="loading">まだ記録がありません</div>'; return; }
+  list.innerHTML=records.slice(0,60).map((r,i)=>{
+    const eidx=employees.findIndex(e=>e.id===r.empId);
+    const col=cc(eidx>=0?eidx:i%6);
+    const d=new Date(r.ts);
+    const dt=d.toLocaleDateString('ja-JP',{month:'numeric',day:'numeric'});
+    const tm=d.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+    const bi=TYPE_INFO[r.type]?.badge||'badge-in';
+    return `<div class="rec-item">
+      <div class="av-sm ${col}">${ini(r.name)}</div>
+      <div class="rec-info">
+        <div class="rn">${r.name} <span style="font-size:.65rem;color:var(--muted)">${r.dept}</span></div>
+        <div class="rt">${dt} ${tm}</div>
+      </div>
+      <span class="badge ${bi}">${BADGE_LABELS[r.type]||r.type}</span>
+    </div>`;
+  }).join('');
+}
+
+// ===== ADMIN =====
+function renderAdmin(){
+  const list=document.getElementById('emp-mgmt-list');
+  if(!employees.length){ list.innerHTML='<div class="loading">社員が登録されていません</div>'; return; }
+  list.innerHTML=employees.map((e,i)=>`
+    <div class="emp-row">
+      <div class="av-sm ${cc(i)}">${ini(e.name)}</div>
+      <div class="info"><div class="n">${e.name}</div><div class="d">${e.dept}</div></div>
+      <button class="del" onclick="delEmp('${e.id}')">削除</button>
+    </div>`).join('');
+}
+async function addEmp(){
+  const name=document.getElementById('inp-name').value.trim();
+  const dept=document.getElementById('inp-dept').value.trim();
+  if(!name) return;
+  const emp={id:'e'+Date.now(), name, dept:dept||'未設定'};
+  employees.push(emp); saveEmp();
+  document.getElementById('inp-name').value='';
+  document.getElementById('inp-dept').value='';
+  renderAdmin();
+  if(GAS_URL) try{ await apiGet({action:'addEmployee',...emp}); }catch(e){}
+}
+async function delEmp(id){
+  if(!confirm('この社員を削除しますか？')) return;
+  employees=employees.filter(e=>e.id!==id); saveEmp(); renderAdmin();
+  if(GAS_URL) try{ await apiGet({action:'deleteEmployee',id}); }catch(e){}
+}
+function exportCSV(){
+  const rows=[['氏名','部署','種別','日付','時刻']];
+  records.forEach(r=>{
+    const d=new Date(r.ts);
+    rows.push([r.name,r.dept,BADGE_LABELS[r.type]||r.type,
+      d.toLocaleDateString('ja-JP'),d.toLocaleTimeString('ja-JP')]);
+  });
+  const csv=rows.map(r=>r.join(',')).join('\n');
+  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download='出退勤記録.csv'; a.click();
+}
+
+// ===== INIT =====
+if(GAS_URL){ goScreen('main'); syncAll(); }
+setInterval(()=>{ if(offQueue.length && GAS_URL) syncAll(); }, 120000);
+</script>
+</body>
+</html>
